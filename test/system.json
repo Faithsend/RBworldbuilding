@@ -8,40 +8,32 @@
   "authors": [
     {
       "name": "Atropos",
-      "url": "https://foundryvtt.com",
-      "flags": {}
+      "url": "https://foundryvtt.com"
     }
   ],
-  "esmodules": [
-    "module/simple.js"
-  ],
-  "styles": [
-    "styles/simple.css"
-  ],
+  "esmodules": ["module/simple.js"],
+  "styles": ["styles/simple.css"],
+  "packs": [],
   "languages": [
     {
       "lang": "en",
       "name": "English",
-      "path": "lang/en.json",
-      "flags": {}
+      "path": "lang/en.json"
     },
     {
       "lang": "pl",
       "name": "Polski",
-      "path": "lang/pl.json",
-      "flags": {}
+      "path": "lang/pl.json"
     }
   ],
   "compatibility": {
     "minimum": "10",
-    "verified": "12"
+    "verified": "11"
   },
-  "primaryTokenAttribute": "health",
+  "gridDistance": 1,
+  "gridUnits": "m",
+  "primaryTokenAttribute": "point de vie",
   "secondaryTokenAttribute": "power",
   "manifest": "https://raw.githubusercontent.com/foundryvtt/worldbuilding/master/system.json",
-  "download": "https://github.com/foundryvtt/worldbuilding/archive/refs/tags/release-082.zip",
-  "grid": {
-    "distance": 5,
-    "units": "ft"
-  }
+  "download": "https://github.com/foundryvtt/worldbuilding/archive/refs/tags/release-082.zip"
 }

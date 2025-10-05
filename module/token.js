@@ -5,48 +5,45 @@
 export class SimpleTokenDocument extends TokenDocument {
 
   /** @inheritdoc */
-  getBarAttribute(barName, {alternative}={}) {
-    const data = super.getBarAttribute(barName, {alternative});
-    const attr = alternative || this[barName]?.attribute;
-    if ( !data || !attr || !this.actor ) return data;
-    const current = foundry.utils.getProperty(this.actor.system, attr);
-    if ( current?.dtype === "Resource" ) data.min = parseInt(current.min || 0);
-    data.editable = true;
-    return data;
-  }
+  getBarAttribute(barName, { alternative } = {}) {
+    const attrPath = alternative || this[barName]?.attribute;
+    const actor = this.actor;
+    if (!attrPath || !actor) return null;
 
-  /* -------------------------------------------- */
+    const value = foundry.utils.getProperty(actor.system, attrPath);
+    if (value === undefined) return null;
 
-  static getTrackedAttributes(data, _path=[]) {
-    if ( data || _path.length ) return super.getTrackedAttributes(data, _path);
-    data = {};
-    for ( const model of Object.values(game.system.model.Actor) ) {
-      foundry.utils.mergeObject(data, model);
+    const attr = {
+      type: "bar",
+      attribute: attrPath,
+      value: value.value ?? value,
+      max: value.max ?? null,
+      editable: true
+    };
+
+    if (value.min !== undefined) {
+      attr.min = value.min;
     }
-    for ( const actor of game.actors ) {
-      if ( actor.isTemplate ) foundry.utils.mergeObject(data, actor.toObject());
-    }
-    return super.getTrackedAttributes(data);
+
+    return attr;
   }
 }
 
-
 /* -------------------------------------------- */
-
 
 /**
  * Extend the base Token class to implement additional system-specific logic.
  * @extends {Token}
  */
 export class SimpleToken extends Token {
+
+  /** @inheritdoc */
   _drawBar(number, bar, data) {
-    if ( "min" in data ) {
-      // Copy the data to avoid mutating what the caller gave us.
-      data = {...data};
-      // Shift the value and max by the min to draw the bar percentage accurately for a non-zero min
-      data.value -= data.min;
-      data.max -= data.min;
+    if (data.min !== undefined) {
+      const max = data.max - data.min;
+      const value = data.value - data.min;
+      data = { ...data, max, value };
     }
-    return super._drawBar(number, bar, data);
+    super._drawBar(number, bar, data);
   }
 }

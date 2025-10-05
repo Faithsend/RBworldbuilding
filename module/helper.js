@@ -1,128 +1,126 @@
-
+// Version corrigée du helper.js pour Foundry VTT V13
 export class EntitySheetHelper {
 
   static getAttributeData(data) {
-
-    // Determine attribute type.
-    for ( let attr of Object.values(data.system.attributes) ) {
-      if ( attr.dtype ) {
+    for (let attr of Object.values(data.system.attributes)) {
+      if (attr.dtype) {
         attr.isCheckbox = attr.dtype === "Boolean";
         attr.isResource = attr.dtype === "Resource";
         attr.isFormula = attr.dtype === "Formula";
       }
     }
-
-    // Initialize ungrouped attributes for later.
     data.system.ungroupedAttributes = {};
 
-    // Build an array of sorted group keys.
     const groups = data.system.groups || {};
-    let groupKeys = Object.keys(groups).sort((a, b) => {
+    const groupKeys = Object.keys(groups).sort((a, b) => {
       let aSort = groups[a].label ?? a;
       let bSort = groups[b].label ?? b;
       return aSort.localeCompare(bSort);
     });
 
-    // Iterate over the sorted groups to add their attributes.
-    for ( let key of groupKeys ) {
+    for (let key of groupKeys) {
       let group = data.system.attributes[key] || {};
-
-      // Initialize the attributes container for this group.
-      if ( !data.system.groups[key]['attributes'] ) data.system.groups[key]['attributes'] = {};
-
-      // Sort the attributes within the group, and then iterate over them.
-      Object.keys(group).sort((a, b) => a.localeCompare(b)).forEach(attr => {
-        // Avoid errors if this is an invalid group.
-        if ( typeof group[attr] != "object" || !group[attr]) return;
-        // For each attribute, determine whether it's a checkbox or resource, and then add it to the group's attributes list.
-        group[attr]['isCheckbox'] = group[attr]['dtype'] === 'Boolean';
-        group[attr]['isResource'] = group[attr]['dtype'] === 'Resource';
-        group[attr]['isFormula'] = group[attr]['dtype'] === 'Formula';
-        data.system.groups[key]['attributes'][attr] = group[attr];
+      if (!data.system.groups[key]["attributes"]) data.system.groups[key]["attributes"] = {};
+      Object.keys(group).sort().forEach(attr => {
+        if (typeof group[attr] !== "object" || !group[attr]) return;
+        group[attr].isCheckbox = group[attr].dtype === "Boolean";
+        group[attr].isResource = group[attr].dtype === "Resource";
+        group[attr].isFormula = group[attr].dtype === "Formula";
+        data.system.groups[key]["attributes"][attr] = group[attr];
       });
     }
 
-    // Sort the remaining attributes.
-    const keys = Object.keys(data.system.attributes).filter(a => !groupKeys.includes(a));
-    keys.sort((a, b) => a.localeCompare(b));
-    for ( const key of keys ) data.system.ungroupedAttributes[key] = data.system.attributes[key];
+    const keys = Object.keys(data.system.attributes).filter(a => !groupKeys.includes(a)).sort();
+    for (const key of keys) data.system.ungroupedAttributes[key] = data.system.attributes[key];
 
-    // Modify attributes on items.
-    if ( data.items ) {
+    if (data.items) {
       data.items.forEach(item => {
-        // Iterate over attributes.
-        for ( let [k, v] of Object.entries(item.system.attributes) ) {
-          // Grouped attributes.
-          if ( !v.dtype ) {
-            for ( let [gk, gv] of Object.entries(v) ) {
-              if ( gv.dtype ) {
-                // Add label fallback.
-                if ( !gv.label ) gv.label = gk;
-                // Add formula bool.
-                if ( gv.dtype === "Formula" ) {
-                  gv.isFormula = true;
-                }
-                else {
-                  gv.isFormula = false;
-                }
-              }
+        for (let [k, v] of Object.entries(item.system.attributes)) {
+          if (!v.dtype) {
+            for (let [gk, gv] of Object.entries(v)) {
+              if (!gv.label) gv.label = gk;
+              gv.isFormula = gv.dtype === "Formula";
             }
-          }
-          // Ungrouped attributes.
-          else {
-            // Add label fallback.
-            if ( !v.label ) v.label = k;
-            // Add formula bool.
-            if ( v.dtype === "Formula" ) {
-              v.isFormula = true;
-            }
-            else {
-              v.isFormula = false;
-            }
+          } else {
+            if (!v.label) v.label = k;
+            v.isFormula = v.dtype === "Formula";
           }
         }
       });
     }
   }
 
-  /* -------------------------------------------- */
+  static onAttributeRoll(event) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const label = button.closest(".attribute")?.querySelector(".attribute-label")?.value;
+    const chatLabel = label ?? button.parentElement.querySelector(".attribute-key")?.value;
+    const shorthand = game.settings.get("worldbuilding", "macroShorthand");
 
-  /** @override */
-  static onSubmit(event) {
-    // Closing the form/sheet will also trigger a submit, so only evaluate if this is an event.
-    if ( event.currentTarget ) {
-      // Exit early if this isn't a named attribute.
-      if ( (event.currentTarget.tagName.toLowerCase() === 'input') && !event.currentTarget.hasAttribute('name')) {
-        return false;
+    const actor = this.actor ?? this.document?.actor ?? this.document;
+    const item = this.item ?? this.document?.item ?? this.document;
+    const rollData = actor?.getRollData?.();
+    let formula = button.closest(".attribute")?.querySelector(".attribute-value")?.value;
+
+    if (formula) {
+      if (formula.includes("@item.") && item) {
+        let itemName = item.name.slugify({ strict: true });
+        let replacement = shorthand ? `@items.${itemName}.` : `@items.${itemName}.attributes.`;
+        formula = formula.replace("@item.", replacement);
       }
-
-      let attr = false;
-      // If this is the attribute key, we need to make a note of it so that we can restore focus when its recreated.
-      const el = event.currentTarget;
-      if ( el.classList.contains("attribute-key") ) {
-        let val = el.value;
-        let oldVal = el.closest(".attribute").dataset.attribute;
-        let attrError = false;
-        // Prevent attributes that already exist as groups.
-        let groups = document.querySelectorAll('.group-key');
-        for ( let i = 0; i < groups.length; i++ ) {
-          if (groups[i].value === val) {
-            ui.notifications.error(game.i18n.localize("SIMPLE.NotifyAttrDuplicate") + ` (${val})`);
-            el.value = oldVal;
-            attrError = true;
-            break;
-          }
-        }
-        // Handle value and name replacement otherwise.
-        if ( !attrError ) {
-          oldVal = oldVal.includes('.') ? oldVal.split('.')[1] : oldVal;
-          attr = $(el).attr('name').replace(oldVal, val);
-        }
-      }
-
-      // Return the attribute key if set, or true to confirm the submission should be triggered.
-      return attr ? attr : true;
+      const r = new Roll(formula, rollData);
+      return r.toMessage({
+        user: game.user.id,
+        speaker: ChatMessage.getSpeaker({ actor }),
+        flavor: `${chatLabel}`
+      });
     }
+  }
+
+  static async createAttribute(event, app) {
+    const a = event.currentTarget;
+    const group = a.dataset.group;
+    let dtype = a.dataset.dtype;
+    const attrs = app.document.system.attributes;
+    const groups = app.document.system.groups;
+    const form = app.form;
+
+    let objKeys = Object.keys(attrs).filter(k => !Object.keys(groups).includes(k));
+    let nk = Object.keys(attrs).length + 1;
+    let newValue = `attr${nk}`;
+    let newKey = document.createElement("div");
+    while (objKeys.includes(newValue)) {
+      ++nk;
+      newValue = `attr${nk}`;
+    }
+
+    const htmlItems = {
+      key: { type: "text", value: newValue }
+    };
+
+    if (group) {
+      objKeys = attrs[group] ? Object.keys(attrs[group]) : [];
+      nk = objKeys.length + 1;
+      newValue = `attr${nk}`;
+      while (objKeys.includes(newValue)) {
+        ++nk;
+        newValue = `attr${nk}`;
+      }
+      htmlItems.key.value = newValue;
+      htmlItems.group = { type: "hidden", value: group };
+      htmlItems.dtype = { type: "hidden", value: dtype };
+    } else {
+      if (!dtype) {
+        let lastAttr = form.querySelector('.attributes > .attributes-group .attribute:last-child .attribute-dtype')?.value;
+        dtype = lastAttr || "String";
+        htmlItems.dtype = { type: "hidden", value: dtype };
+      }
+    }
+
+    newKey.innerHTML = EntitySheetHelper.getAttributeHtml(htmlItems, nk, group);
+    newKey = newKey.children[0];
+    form.appendChild(newKey);
+    await app._onSubmit(event);
   }
 
   /* -------------------------------------------- */
@@ -583,7 +581,7 @@ export class EntitySheetHelper {
       if ( parts.pop() !== "value" ) continue;
       const current = foundry.utils.getProperty(attrs, parts.join("."));
       if ( current?.dtype !== "Resource" ) continue;
-      foundry.utils.setProperty(attrs, attr, Math.clamp(value, current.min || 0, current.max || 0));
+      foundry.utils.setProperty(attrs, attr, Math.clamped(value, current.min || 0, current.max || 0));
     }
   }
 
